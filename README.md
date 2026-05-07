@@ -79,6 +79,11 @@ Run standalone:
 python mcp_server.py
 ```
 
+> **Note:** `bob-mcp-config.json` contains a hardcoded `cwd` path pointing to the original dev machine. Before registering with Bob IDE, update the `cwd` field to match where you cloned this repo:
+> ```json
+> "cwd": "C:/your/path/to/bob-the-judge"
+> ```
+
 ## IBM Roadmap Alignment
 
 Bob the Judge **extends watsonx.governance Q1 2026 Agent Monitoring & Insights** into the COBOL → Java cutover window:
