@@ -147,12 +147,6 @@ The MCP server registered with Bob means anyone running this repo can ask Bob to
 - starlette < 1.0 (FastAPI compatibility — do not auto-upgrade)
 - IBM Plex Sans / Mono / Serif (UI typography)
 
-## Hackathon Submission
-
-- **Event:** [IBM Bob Hackathon — Lablab.ai](https://lablab.ai/ai-hackathons/ibm-bob-hackathon)
-- **Window:** May 15–17, 2026
-- **Prize:** $10K total ($5K / $3K / $2K)
-- **Repo:** public on GitHub (Lablab penalises private)
 
 ## License
 
