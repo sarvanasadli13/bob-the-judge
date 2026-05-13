@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "bob-the-judge": {
+      "command": "python",
+      "args": ["mcp_server.py"],
+      "cwd": "C:/Users/Sarvan/projects/bob-the-judge",
+      "description": "Bob the Judge — Live migration cutover advisor. Provides analyze_cutover_readiness, get_function_verdict, get_risk_summary, list_monitored_functions."
+    }
+  }
+}
