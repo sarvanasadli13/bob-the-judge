@@ -21,6 +21,9 @@ Built for the IBM Bob Hackathon 2026 (Lablab.ai, May 15–17).
 ![After Patch — READY FOR CUTOVER](docs/screenshots/03-ready-cutover.png)
 *After clicking "Apply Bob's Patch & Re-Analyse" — all 4 functions cleared, zero exposure. READY FOR CUTOVER.*
 
+![Bob's Code Fix](docs/screenshots/04-bob-code-fix.png)
+*Bob (Code mode) generates the FX margin reconciliation fix — root cause + recommended patch targeting `services/modern_bank.py`.*
+
 ---
 
 ## What It Does
