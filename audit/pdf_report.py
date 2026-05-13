@@ -90,7 +90,7 @@ def _header_footer(canvas, doc):
     canvas.restoreState()
 
 
-def generate_pdf(scores: list[dict], results: list[dict], run_ts: datetime | None = None) -> bytes:
+def generate_pdf(scores: list[dict], results: list[dict], run_ts: datetime | None = None, bob_session_id: str | None = None) -> bytes:
     if run_ts is None:
         run_ts = datetime.now(timezone.utc)
 
@@ -143,6 +143,7 @@ def generate_pdf(scores: list[dict], results: list[dict], run_ts: datetime | Non
         ["Functions Blocked", f"{blocked_count}"],
         ["Analysis Timestamp", run_ts.strftime("%Y-%m-%d %H:%M:%S UTC")],
         ["System Under Test", "Banking Payment Processor (Legacy → Modern)"],
+        ["Bob Session ID", bob_session_id or "—"],
     ]
 
     story.append(Paragraph("Executive Summary", s["section"]))

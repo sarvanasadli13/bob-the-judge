@@ -361,29 +361,50 @@ with ctrl5:
 
 # ── Run analysis ──────────────────────────────────────────────────────────────
 if run_analysis:
-    with st.spinner("Routing traffic through legacy and modern systems..."):
-        try:
-            pairs = asyncio.run(run_batch(n=n_transactions, demo_mode=demo_mode))
-        except Exception as _conn_err:
-            st.error(
-                "**Banking services offline.** "
-                "Start both services before launching the dashboard:\n\n"
-                "```\nbash start.sh\n```\n\n"
-                f"Detail: `{_conn_err}`"
-            )
-            st.stop()
-        results = analyse_batch(pairs)
-        results = flag_anomalies(results)
-        scores = score_results(results)
-        st.session_state["scores"] = scores
-        st.session_state["results"] = results
-        st.session_state["run_ts"] = datetime.now(timezone.utc)
-        if "run_history" not in st.session_state:
-            st.session_state["run_history"] = []
-        entry = {"run": f"Run {len(st.session_state['run_history']) + 1}", "ts": st.session_state["run_ts"].strftime("%H:%M:%S")}
-        for s in scores:
-            entry[s["function"]] = s["parity_rate_pct"]
-        st.session_state["run_history"].append(entry)
+    _scan_ph = st.empty()
+
+    def _show_scan(pct, msg):
+        _scan_ph.markdown(
+            f"<div style='background:#161616;border:1px solid #0f62fe;padding:16px 24px;margin:8px 0'>"
+            f"<div style='font-family:\"IBM Plex Mono\",monospace;font-size:12px;color:#0f62fe;margin-bottom:10px'>▌ {msg}</div>"
+            f"<div style='background:#393939;height:3px'><div style='background:#0f62fe;height:3px;width:{pct}%'></div></div>"
+            f"<div style='font-family:\"IBM Plex Mono\",monospace;font-size:10px;color:#6f6f6f;margin-top:6px'>{pct}%</div>"
+            f"</div>",
+            unsafe_allow_html=True,
+        )
+        time.sleep(0.35)
+
+    _show_scan(20, "Generating transaction sample...")
+    _show_scan(45, "Routing through Legacy + Modern banks...")
+
+    try:
+        pairs = asyncio.run(run_batch(n=n_transactions, demo_mode=demo_mode))
+    except Exception as _conn_err:
+        _scan_ph.empty()
+        st.error(
+            "**Banking services offline.** "
+            "Start both services before launching the dashboard:\n\n"
+            "```\nbash start.sh\n```\n\n"
+            f"Detail: `{_conn_err}`"
+        )
+        st.stop()
+
+    _show_scan(70, "Running Parity Engine · 2σ anomaly detection...")
+    results = analyse_batch(pairs)
+    results = flag_anomalies(results)
+    _show_scan(92, "Computing Wilson 95% CI readiness scores...")
+    scores = score_results(results)
+    _scan_ph.empty()
+
+    st.session_state["scores"] = scores
+    st.session_state["results"] = results
+    st.session_state["run_ts"] = datetime.now(timezone.utc)
+    if "run_history" not in st.session_state:
+        st.session_state["run_history"] = []
+    entry = {"run": f"Run {len(st.session_state['run_history']) + 1}", "ts": st.session_state["run_ts"].strftime("%H:%M:%S")}
+    for s in scores:
+        entry[s["function"]] = s["parity_rate_pct"]
+    st.session_state["run_history"].append(entry)
 
 scores = st.session_state.get("scores", [])
 results = st.session_state.get("results", [])
@@ -391,8 +412,10 @@ run_ts = st.session_state.get("run_ts", datetime.now(timezone.utc))
 
 # ── PDF export ────────────────────────────────────────────────────────────────
 if export_pdf and scores:
+    bob_resp = st.session_state.get("bob_response") or st.session_state.get("bob_patch_response")
+    bob_sid = bob_resp.get("session_id") if bob_resp else None
     with st.spinner("Generating audit report..."):
-        pdf_bytes = generate_pdf(scores, results, run_ts)
+        pdf_bytes = generate_pdf(scores, results, run_ts, bob_session_id=bob_sid)
     filename = f"bob_the_judge_audit_{run_ts.strftime('%Y%m%d_%H%M%S')}.pdf"
     st.download_button(
         label="Download Audit Report (PDF)",
@@ -683,7 +706,7 @@ IBM_CHART_THEME = dict(
 
 history = st.session_state.get("run_history", [])
 has_history = len(history) > 1
-tab_labels = ["Parity by Function", "Latency Distribution"] + (["Run History Trend"] if has_history else [])
+tab_labels = ["Parity by Function", "Latency Distribution", "Parity Radar"] + (["Run History Trend"] if has_history else [])
 tabs = st.tabs(tab_labels)
 
 with tabs[0]:
@@ -726,8 +749,49 @@ with tabs[1]:
         fig2.update_layout(yaxis=dict(title="ms", gridcolor="#393939"), xaxis=dict(gridcolor="#393939"), **IBM_CHART_THEME)
         st.plotly_chart(fig2, use_container_width=True)
 
+with tabs[2]:
+    st.markdown("<div style='color:#8d8d8d;font-size:12px;font-weight:600;letter-spacing:1px;text-transform:uppercase;margin-bottom:8px'>Parity Radar — Function Readiness vs Cut Threshold</div>", unsafe_allow_html=True)
+    _radar_labels = [s["function"].replace(" Wire Transfer", "").replace(" Payment", "") for s in scores]
+    _radar_labels_closed = _radar_labels + [_radar_labels[0]]
+    _radar_vals = [s["parity_rate_pct"] for s in scores]
+    _radar_vals_closed = _radar_vals + [_radar_vals[0]]
+    _threshold_closed = [95] * (len(scores) + 1)
+    _color_map = {"SAFE_TO_CUT": "#42be65", "CUT_WITH_MONITORING": "#f1c21b", "HOLD_INVESTIGATE": "#ff832b", "DO_NOT_CUT": "#fa4d56"}
+    _dominant_verdict = max(set(s["verdict"] for s in scores), key=lambda v: ["SAFE_TO_CUT", "CUT_WITH_MONITORING", "HOLD_INVESTIGATE", "DO_NOT_CUT"].index(v))
+    _fill_color = _color_map.get(_dominant_verdict, "#0f62fe")
+    _fill_rgba = _fill_color.replace("#", "")
+    r, g, b = int(_fill_rgba[0:2], 16), int(_fill_rgba[2:4], 16), int(_fill_rgba[4:6], 16)
+    fig_radar = go.Figure()
+    fig_radar.add_trace(go.Scatterpolar(
+        r=_threshold_closed, theta=_radar_labels_closed,
+        fill="toself", fillcolor="rgba(66,190,101,0.06)",
+        line=dict(color="#42be65", dash="dot", width=1.5),
+        name="Cut Threshold (95%)",
+    ))
+    fig_radar.add_trace(go.Scatterpolar(
+        r=_radar_vals_closed, theta=_radar_labels_closed,
+        fill="toself", fillcolor=f"rgba({r},{g},{b},0.18)",
+        line=dict(color=_fill_color, width=2.5),
+        name="Parity Rate",
+        text=[f"{v:.1f}%" for v in _radar_vals_closed],
+        mode="lines+markers+text",
+        textposition="top center",
+        textfont=dict(family="IBM Plex Mono, monospace", size=11, color="#f4f4f4"),
+        marker=dict(size=8, color=_fill_color),
+    ))
+    fig_radar.update_layout(
+        polar=dict(
+            radialaxis=dict(visible=True, range=[0, 110], gridcolor="#393939", tickfont=dict(color="#6f6f6f", size=9), ticksuffix="%"),
+            angularaxis=dict(gridcolor="#393939", tickfont=dict(color="#c6c6c6", size=11)),
+            bgcolor="#262626",
+        ),
+        legend=dict(font=dict(size=10), bgcolor="rgba(0,0,0,0)", x=0.85, y=1.1),
+        **IBM_CHART_THEME,
+    )
+    st.plotly_chart(fig_radar, use_container_width=True)
+
 if has_history:
-    with tabs[2]:
+    with tabs[3]:
         st.markdown("<div style='color:#8d8d8d;font-size:12px;font-weight:600;letter-spacing:1px;text-transform:uppercase;margin-bottom:8px'>Parity Trend Across Runs</div>", unsafe_allow_html=True)
         df_hist = pd.DataFrame(history)
         fn_colors = {
