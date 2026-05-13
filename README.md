@@ -158,12 +158,7 @@ bob-the-judge/
 - IBM Plex Sans / Mono (UI typography via Google Fonts)
 
 ---
-
-## Hackathon Submission
-
-- **Event:** [IBM Bob Hackathon — Lablab.ai](https://lablab.ai/ai-hackathons/ibm-bob-hackathon)
-- **Window:** May 15–17, 2026
-- **Prize:** $10K total ($5K / $3K / $2K)
+BUILD FOR LABLABAI IBM BOB HACKATON 2026 SUBMISSION BY CYBERFALCON TEAM
 
 ## License
 
