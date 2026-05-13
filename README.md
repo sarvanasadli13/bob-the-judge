@@ -6,6 +6,18 @@ Built for the IBM Bob Hackathon 2026 (Lablab.ai, May 15–17).
 
 > Bob writes the code. Bob ships it. **Bob the Judge tells Bob when to flip the switch.**
 
+![Cover](cover.jpg)
+
+---
+
+## Screenshots
+
+![Hero — Dashboard ready](docs/screenshots/01-hero.png)
+*IBM Carbon Design System dashboard — IBM logo in topbar, sidebar system health, hero band.*
+
+![Results — HOLD: DO NOT CUT](docs/screenshots/02-results.png)
+*Live parity analysis: 2 functions blocked, $4.8M at risk. Decision banner shows HOLD — DO NOT CUT.*
+
 ---
 
 ## What It Does
