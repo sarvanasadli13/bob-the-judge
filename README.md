@@ -18,6 +18,9 @@ Built for the IBM Bob Hackathon 2026 (Lablab.ai, May 15–17).
 ![Results — HOLD: DO NOT CUT](docs/screenshots/02-results.png)
 *Live parity analysis: 2 functions blocked, $4.8M at risk. Decision banner shows HOLD — DO NOT CUT.*
 
+![After Patch — READY FOR CUTOVER](docs/screenshots/03-ready-cutover.png)
+*After clicking "Apply Bob's Patch & Re-Analyse" — all 4 functions cleared, zero exposure. READY FOR CUTOVER.*
+
 ---
 
 ## What It Does
