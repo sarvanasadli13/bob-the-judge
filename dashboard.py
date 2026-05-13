@@ -163,14 +163,22 @@ with ctrl5:
 # ── Run analysis ──────────────────────────────────────────────────────────────
 if run_analysis or "scores" not in st.session_state:
     with st.spinner("Routing traffic through legacy and modern systems..."):
-        pairs = asyncio.run(run_batch(n=n_transactions, demo_mode=demo_mode))
+        try:
+            pairs = asyncio.run(run_batch(n=n_transactions, demo_mode=demo_mode))
+        except Exception as _conn_err:
+            st.error(
+                "**Banking services offline.** "
+                "Start both services before launching the dashboard:\n\n"
+                "```\nbash start.sh\n```\n\n"
+                f"Detail: `{_conn_err}`"
+            )
+            st.stop()
         results = analyse_batch(pairs)
         results = flag_anomalies(results)
         scores = score_results(results)
         st.session_state["scores"] = scores
         st.session_state["results"] = results
         st.session_state["run_ts"] = datetime.now(timezone.utc)
-        # Append to run history
         if "run_history" not in st.session_state:
             st.session_state["run_history"] = []
         entry = {"run": f"Run {len(st.session_state['run_history']) + 1}", "ts": st.session_state["run_ts"].strftime("%H:%M:%S")}
@@ -195,7 +203,22 @@ if export_pdf and scores:
     )
 
 if not scores:
-    st.info("Click Run Analysis to begin.")
+    st.markdown("""
+    <div style='background:#1a1a2e;border:1px solid #0f62fe;border-left:4px solid #0f62fe;padding:28px 32px;margin:24px 0'>
+        <div style='font-family:IBM Plex Sans,sans-serif;font-size:22px;font-weight:600;color:#f4f4f4;margin-bottom:10px'>
+            When is it safe to flip the switch?
+        </div>
+        <div style='font-family:IBM Plex Sans,sans-serif;font-size:14px;color:#c6c6c6;line-height:1.7;max-width:720px'>
+            Bob the Judge runs live payment transactions through your legacy and modern banking systems simultaneously,
+            scores parity at function level, and tells you exactly which functions are safe to cut over today —
+            with a regulator-grade audit trail in one click.
+        </div>
+        <div style='margin-top:18px;font-family:IBM Plex Mono,monospace;font-size:12px;color:#6f6f6f'>
+            → Enable <b style='color:#c6c6c6'>Demo Mode</b> above for a consistent guided scenario &nbsp;·&nbsp;
+            Click <b style='color:#c6c6c6'>Run Analysis</b> to start
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
     st.stop()
 
 # ── KPI row ───────────────────────────────────────────────────────────────────
@@ -398,7 +421,7 @@ if show_patch_section:
             resp = st.session_state["bob_patch_response"]
             st.markdown(
                 "<div class='bob-panel'>"
-                "<div class='bob-source-mock'>○ MOCK — Real Bob connects May 15</div>"
+                "<div class='bob-source-mock'>○ IBM Bob API — connecting at hackathon kickoff</div>"
                 f"&nbsp;·&nbsp;<span style='font-family:IBM Plex Mono,monospace;font-size:11px;color:#6f6f6f'>"
                 f"mode:code &nbsp; session:{resp['session_id']}</span>"
                 "</div>",
@@ -656,7 +679,7 @@ with bob_col2:
         resp = st.session_state["bob_response"]
         is_live = resp.get("source") != "mock"
         tag_class = "bob-source-live" if is_live else "bob-source-mock"
-        tag_text = "● LIVE — IBM Bob API" if is_live else "○ MOCK — Real Bob connects May 15"
+        tag_text = "● LIVE — IBM Bob API" if is_live else "○ IBM Bob API — connecting at hackathon kickoff"
         st.markdown(f"""
         <div class="bob-panel">
             <div class="{tag_class}">{tag_text}</div>
