@@ -68,6 +68,8 @@ BobTheJudge.exe
 ```
 Clears ports 8001/8002/8501 → starts both bank services → opens dashboard in browser.
 
+> **Requires Python 3.11+ in PATH.** The exe is a launcher, not a self-contained bundle. If you see a "Python not found" error, install Python 3.11+ and ensure it is added to PATH.
+
 **Option B — Python**
 ```bash
 # Install deps
