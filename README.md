@@ -34,6 +34,19 @@ Bob the Judge produces a **per-function readiness verdict** (SAFE TO CUT / DO NO
 
 It runs Bob in all four modes — **Plan, Code, Ask, Orchestrator** — and exposes itself as an **MCP server** so Bob can query it directly from the IDE.
 
+### Key Features
+
+| Feature | Description |
+|---|---|
+| **Per-function verdicts** | SAFE TO CUT / DO NOT CUT per payment function — not a single system score |
+| **Wilson 95% CI scoring** | Statistical lower bound guarantees readiness, not just today's accuracy |
+| **>2σ anomaly flagging** | Fee divergences beyond 2 standard deviations flagged before production |
+| **Parity Radar Chart** | Spider chart comparing each function's parity rate against the 95% cut threshold |
+| **IBM Carbon scanning animation** | Terminal-style 4-step progress indicator during analysis |
+| **Bob Session ID in PDF** | Full chain-of-custody: Bug → Bob Fix → Re-test → Signed off. Regulator-grade. |
+| **One-click audit PDF** | Executive summary, divergence log, Bob Session ID, sign-off page |
+| **MCP server** | Bob queries Bob the Judge directly from the IDE — 4 tools exposed |
+
 ---
 
 ## Architecture
@@ -143,7 +156,8 @@ bob-the-judge/
 ├── dashboard.py                # Streamlit UI (IBM Carbon Design System)
 ├── mcp_server.py               # FastMCP server (4 tools)
 ├── bob-mcp-config.json         # Bob IDE MCP registration
-├── DEMO_SCRIPT.md              # 3-minute demo script
+├── DEMO_SCRIPT.md              # 3-minute demo script (word-for-word)
+├── PITCH_SCRIPTS.md            # 30s / 2min / 5min pitch scripts + judge Q&A
 ├── assets/gavel.svg
 ├── services/                   # FastAPI legacy + modern banks
 ├── parity/                     # traffic generator, parity engine, scoring
