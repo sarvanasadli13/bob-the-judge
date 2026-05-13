@@ -161,7 +161,7 @@ with ctrl5:
     demo_mode = st.checkbox("🎯 Demo", help="Fixed scenario — guarantees 2 safe + 2 blocked for consistent demos")
 
 # ── Run analysis ──────────────────────────────────────────────────────────────
-if run_analysis or "scores" not in st.session_state:
+if run_analysis:
     with st.spinner("Routing traffic through legacy and modern systems..."):
         try:
             pairs = asyncio.run(run_batch(n=n_transactions, demo_mode=demo_mode))
