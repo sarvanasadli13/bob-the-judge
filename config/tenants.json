@@ -1,0 +1,58 @@
+{
+  "tier1_global": {
+    "name": "Global Tier 1 Bank",
+    "tier": "tier1",
+    "fee_tolerance_usd": 0.01,
+    "amount_tolerance_usd": 0.02,
+    "parity_threshold_pct": 99.0,
+    "anomaly_sigma_threshold": 1.5,
+    "ffiec_category": "Large Bank (>$10B assets)",
+    "basel_operational_risk_weight": 0.12,
+    "psd2_jurisdiction": true,
+    "max_daily_exposure_usd": 50000000,
+    "requires_cto_signoff": true,
+    "rationale": "Tier 1 banks require strictest tolerances due to systemic risk, high transaction volumes ($50B+ daily), and enhanced regulatory scrutiny (Basel III, FFIEC Large Bank standards). 99% parity threshold reflects zero-tolerance approach for systemically important financial institutions."
+  },
+  "tier2_regional": {
+    "name": "Regional Tier 2 Bank",
+    "tier": "tier2",
+    "fee_tolerance_usd": 0.02,
+    "amount_tolerance_usd": 0.05,
+    "parity_threshold_pct": 95.0,
+    "anomaly_sigma_threshold": 2.0,
+    "ffiec_category": "Regional Bank ($1B-$10B assets)",
+    "basel_operational_risk_weight": 0.15,
+    "psd2_jurisdiction": true,
+    "max_daily_exposure_usd": 5000000,
+    "requires_cto_signoff": true,
+    "rationale": "Tier 2 banks balance risk management with operational flexibility. Standard Wilson 95% CI threshold appropriate for $1B-$10B asset range. FFIEC IT Handbook allows risk-based approach commensurate with institution size and complexity."
+  },
+  "community_bank": {
+    "name": "Community Bank",
+    "tier": "community",
+    "fee_tolerance_usd": 0.05,
+    "amount_tolerance_usd": 0.10,
+    "parity_threshold_pct": 90.0,
+    "anomaly_sigma_threshold": 2.5,
+    "ffiec_category": "Community Bank (<$1B assets)",
+    "basel_operational_risk_weight": 0.15,
+    "psd2_jurisdiction": false,
+    "max_daily_exposure_usd": 500000,
+    "requires_cto_signoff": false,
+    "rationale": "Community banks (<$1B assets) have lower transaction volumes and less complex operations. FFIEC allows risk-based approach commensurate with size and complexity. 90% threshold reflects proportionate risk management for smaller institutions with limited IT resources."
+  },
+  "demo_default": {
+    "name": "Demo Bank (Default Profile)",
+    "tier": "tier2",
+    "fee_tolerance_usd": 0.02,
+    "amount_tolerance_usd": 0.05,
+    "parity_threshold_pct": 95.0,
+    "anomaly_sigma_threshold": 2.0,
+    "ffiec_category": "Demo Environment",
+    "basel_operational_risk_weight": 0.15,
+    "psd2_jurisdiction": true,
+    "max_daily_exposure_usd": 5000000,
+    "requires_cto_signoff": false,
+    "rationale": "Default profile for demonstrations and backward compatibility. Uses standard tier 2 thresholds matching original Bob the Judge hardcoded values."
+  }
+}

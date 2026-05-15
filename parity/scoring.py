@@ -1,11 +1,19 @@
 import math
 from collections import defaultdict
 from dataclasses import dataclass, field
+from typing import Optional, Any
+
+# Import tenant configuration
+try:
+    from parity.tenant_config import TenantProfile
+except ImportError:
+    TenantProfile = Any  # type: ignore
 
 
 @dataclass
 class FunctionScore:
     name: str
+    tenant: Optional[Any] = None  # TenantProfile
     total: int = 0
     passing: int = 0
     high_severity: int = 0
@@ -84,12 +92,18 @@ class FunctionScore:
 
     @property
     def verdict(self) -> str:
+        """
+        Cutover verdict based on readiness score and tenant-specific threshold.
+        Uses tenant.parity_threshold_pct if available, otherwise defaults to 95%.
+        """
         score = self.readiness_score
-        if score >= 95:
+        threshold = self.tenant.parity_threshold_pct if self.tenant else 95.0
+        
+        if score >= threshold:
             return "SAFE_TO_CUT"
-        elif score >= 80:
+        elif score >= threshold - 15:
             return "CUT_WITH_MONITORING"
-        elif score >= 60:
+        elif score >= threshold - 35:
             return "HOLD_INVESTIGATE"
         else:
             return "DO_NOT_CUT"
@@ -105,7 +119,7 @@ class FunctionScore:
 
     def to_dict(self) -> dict:
         ci_lo, ci_hi = self.confidence_interval
-        return {
+        result = {
             "function": self.name,
             "total_transactions": self.total,
             "parity_rate_pct": self.parity_rate,
@@ -122,6 +136,19 @@ class FunctionScore:
             "avg_latency_improvement_pct": self.avg_latency_improvement_pct,
             "exposure_usd": self.exposure_usd,
         }
+        
+        # Add tenant profile info if available
+        if self.tenant:
+            result["tenant_profile"] = {
+                "tenant_id": self.tenant.tenant_id,
+                "name": self.tenant.name,
+                "tier": self.tenant.tier,
+                "parity_threshold_pct": self.tenant.parity_threshold_pct,
+                "fee_tolerance_usd": float(self.tenant.fee_tolerance_usd),
+                "anomaly_sigma_threshold": self.tenant.anomaly_sigma_threshold,
+            }
+        
+        return result
 
 
 TX_TYPE_TO_FUNCTION = {
@@ -132,12 +159,25 @@ TX_TYPE_TO_FUNCTION = {
 }
 
 
-def score_results(results: list[dict]) -> list[dict]:
-    buckets: dict[str, FunctionScore] = defaultdict(lambda: FunctionScore(name=""))
+def score_results(results: list[dict], tenant: Optional[Any] = None) -> list[dict]:
+    """
+    Score parity results by function using tenant-specific thresholds.
+    
+    Args:
+        results: List of parity comparison results
+        tenant: Optional TenantProfile for tenant-specific scoring
+    
+    Returns:
+        List of function score dicts
+    """
+    def make_score() -> FunctionScore:
+        return FunctionScore(name="", tenant=tenant)
+    
+    buckets: dict[str, FunctionScore] = defaultdict(make_score)
 
     for r in results:
         tx_type = r["transaction_type"]
-        func_name = TX_TYPE_TO_FUNCTION.get(tx_type, tx_type)
+        func_name: str = TX_TYPE_TO_FUNCTION.get(tx_type, tx_type)  # type: ignore
         if buckets[func_name].name == "":
             buckets[func_name].name = func_name
         buckets[func_name].ingest(r)
@@ -149,3 +189,32 @@ def score_results(results: list[dict]) -> list[dict]:
 
     scores.sort(key=lambda x: x["readiness_score"], reverse=True)
     return scores
+
+
+def format_score_summary(scores: list[FunctionScore]) -> str:
+    """
+    Format a human-readable multi-line summary of function scores.
+    
+    Args:
+        scores: List of FunctionScore objects
+    
+    Returns:
+        Multi-line string summary for CLI output and logs
+    """
+    if not scores:
+        return "No scores available."
+    
+    lines = ["=" * 70, "PARITY SCORE SUMMARY", "=" * 70]
+    
+    for score in scores:
+        lines.append(f"\n{score.name}")
+        lines.append("-" * 70)
+        lines.append(f"  Verdict:         {score.verdict}")
+        lines.append(f"  Parity Rate:     {score.parity_rate}% ({score.passing}/{score.total} passing)")
+        lines.append(f"  Readiness Score: {score.readiness_score}")
+        
+        if score.critical_severity or score.high_severity or score.medium_severity:
+            lines.append(f"  Divergences:     Critical={score.critical_severity}, High={score.high_severity}, Medium={score.medium_severity}")
+    
+    lines.append("=" * 70)
+    return "\n".join(lines)

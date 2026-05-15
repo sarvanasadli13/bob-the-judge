@@ -1,8 +1,18 @@
 from decimal import Decimal, ROUND_HALF_UP
 from services.models import TransactionType
+from typing import Optional, Any
 
-FEE_TOLERANCE = Decimal("0.02")        # 2 cents — acceptable rounding diff
-AMOUNT_TOLERANCE = Decimal("0.05")     # 5 cents on settled amount
+# Import tenant configuration for per-bank tolerance profiles
+try:
+    from parity.tenant_config import TenantProfile, get_default_tenant
+except ImportError:
+    # Fallback for backward compatibility
+    TenantProfile = Any  # type: ignore
+    get_default_tenant = None
+
+# Default tolerances (used when no tenant profile provided)
+DEFAULT_FEE_TOLERANCE = Decimal("0.02")        # 2 cents — acceptable rounding diff
+DEFAULT_AMOUNT_TOLERANCE = Decimal("0.05")     # 5 cents on settled amount
 LATENCY_THRESHOLD_MS = 5
 
 REGULATION_MAP = {
@@ -21,7 +31,25 @@ def _d(value) -> Decimal:
     return Decimal(str(value)).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
 
 
-def compare_pair(pair: dict) -> dict:
+def compare_pair(pair: dict, tenant: Optional[Any] = None) -> dict:
+    """
+    Compare legacy vs modern outputs for a single transaction.
+    
+    Args:
+        pair: Dict with 'payment', 'legacy', and 'modern' keys
+        tenant: Optional TenantProfile for tenant-specific tolerances
+    
+    Returns:
+        Dict with parity result, divergences, and metrics
+    """
+    # Get tenant-specific tolerances or use defaults
+    if tenant is not None:
+        fee_tolerance = tenant.fee_tolerance_usd
+        amount_tolerance = tenant.amount_tolerance_usd
+    else:
+        fee_tolerance = DEFAULT_FEE_TOLERANCE
+        amount_tolerance = DEFAULT_AMOUNT_TOLERANCE
+    
     payment = pair["payment"]
     legacy = pair["legacy"]
     modern = pair["modern"]
@@ -29,11 +57,11 @@ def compare_pair(pair: dict) -> dict:
 
     divergences = []
 
-    # --- fee comparison ---
+    # --- fee comparison (tenant-specific tolerance) ---
     legacy_fee = _d(legacy.get("fee", 0))
     modern_fee = _d(modern.get("fee", 0))
     fee_diff = abs(legacy_fee - modern_fee)
-    fee_match = fee_diff <= FEE_TOLERANCE
+    fee_match = fee_diff <= fee_tolerance
 
     if not fee_match:
         divergences.append({
@@ -45,11 +73,11 @@ def compare_pair(pair: dict) -> dict:
             "regulation": REGULATION_MAP.get((tx_type, "fee"), "PSD2 Art. 62"),
         })
 
-    # --- settled amount comparison ---
+    # --- settled amount comparison (tenant-specific tolerance) ---
     legacy_settled = _d(legacy.get("processed_amount", 0))
     modern_settled = _d(modern.get("processed_amount", 0))
     settled_diff = abs(legacy_settled - modern_settled)
-    settled_match = settled_diff <= AMOUNT_TOLERANCE
+    settled_match = settled_diff <= amount_tolerance
 
     if not settled_match:
         divergences.append({
@@ -98,12 +126,33 @@ def compare_pair(pair: dict) -> dict:
     }
 
 
-def analyse_batch(pairs: list[dict]) -> list[dict]:
-    return [compare_pair(p) for p in pairs]
+def analyse_batch(pairs: list[dict], tenant: Optional[Any] = None) -> list[dict]:
+    """
+    Analyse a batch of transaction pairs using tenant-specific tolerances.
+    
+    Args:
+        pairs: List of dicts with 'payment', 'legacy', and 'modern' keys
+        tenant: Optional TenantProfile for tenant-specific tolerances
+    
+    Returns:
+        List of parity comparison results
+    """
+    return [compare_pair(p, tenant=tenant) for p in pairs]
 
 
-def flag_anomalies(results: list[dict]) -> list[dict]:
-    """Flag transactions whose fee_diff is > 2σ above the mean for their payment type."""
+def flag_anomalies(results: list[dict], tenant: Optional[Any] = None) -> list[dict]:
+    """
+    Flag transactions whose fee_diff is > tenant-specific σ threshold above the mean.
+    
+    Args:
+        results: List of parity comparison results
+        tenant: Optional TenantProfile (uses tenant.anomaly_sigma_threshold)
+    
+    Returns:
+        Results with 'anomaly' and 'anomaly_sigma' fields added
+    """
+    # Get sigma threshold from tenant or use default
+    sigma_threshold = tenant.anomaly_sigma_threshold if tenant else 2.0
     import statistics
     from collections import defaultdict
 
@@ -123,7 +172,7 @@ def flag_anomalies(results: list[dict]) -> list[dict]:
         if tx_type in thresholds and thresholds[tx_type][1] > 0:
             mean, std = thresholds[tx_type]
             sigma = (r["fee_diff"] - mean) / std
-            r["anomaly"] = sigma > 2.0 and r["fee_diff"] > 0.05
+            r["anomaly"] = sigma > sigma_threshold and r["fee_diff"] > 0.05
             r["anomaly_sigma"] = round(sigma, 1)
         else:
             r["anomaly"] = False
