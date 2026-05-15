@@ -1,2 +1,6 @@
 build/
 *.spec
+.env
+.env.local
+.env.*
+*.env

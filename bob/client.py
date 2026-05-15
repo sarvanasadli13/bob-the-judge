@@ -9,6 +9,9 @@ import json
 import time
 import logging
 from typing import Literal
+from dotenv import load_dotenv
+
+load_dotenv()
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [BOB] %(message)s")
 logger = logging.getLogger("bob.client")
