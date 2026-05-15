@@ -15,16 +15,13 @@ End-to-end IBM stack: **IBM Bob** as the development partner (5 task sessions in
 ## Screenshots
 
 ![Hero — Dashboard ready](docs/screenshots/01-hero.png)
-*IBM Carbon Design System dashboard — IBM logo in topbar, sidebar system health, hero band.*
+*IBM Carbon Design System dashboard — topbar shows `● LIVE Bob | ● watsonx.ai`, sidebar lists IBM Bob API + watsonx.ai (Granite) + MCP Server health, plus the Tenant Profile selector (4 reference bank tiers).*
 
-![Results — HOLD: DO NOT CUT](docs/screenshots/02-results.png)
-*Live parity analysis: 2 functions blocked, $4.8M at risk. Decision banner shows HOLD — DO NOT CUT.*
+![Results — READY FOR CUTOVER with tenant-calibrated thresholds](docs/screenshots/02-results.png)
+*Live parity analysis using the Tier 1 Global profile (99% threshold, $0.01 fee tolerance, 1.5σ anomaly). 80 transactions through legacy + modern systems, per-function Wilson 95% CI, READY FOR CUTOVER verdict.*
 
-![After Patch — READY FOR CUTOVER](docs/screenshots/03-ready-cutover.png)
-*After clicking "Apply Bob's Patch & Re-Analyse" — all 4 functions cleared, zero exposure. READY FOR CUTOVER.*
-
-![Bob's Code Fix](docs/screenshots/04-bob-code-fix.png)
-*Bob (Code mode) generates the FX margin reconciliation fix — root cause + recommended patch targeting `services/modern_bank.py`.*
+![Bob's response — live IBM Granite via watsonx.ai](docs/screenshots/03-bob-granite-live.png)
+*Click `Ask Bob` → real-time call to `ibm/granite-4-h-small` on watsonx.ai. The badge `● LIVE — IBM Bob API · powered by Granite (ibm/granite-4-h-small) on watsonx.ai` plus the `WATSONX-...` session ID give full traceability. Granite produces a phased migration plan citing FFIEC, Basel III, and PSD2 by name.*
 
 ---
 
