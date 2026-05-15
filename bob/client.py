@@ -59,7 +59,7 @@ def _call_real_bob(mode: BobMode, prompt: str, context: dict) -> dict:
     except Exception as exc:
         logger.error("Bob API call failed: %s — falling back to mock", exc)
         result = _mock_bob(mode, prompt, context)
-        result["content"] = f"> ⚠️ Bob API error: `{exc}`\n> Showing intelligent mock response below.\n\n" + result["content"]
+        result["content"] = f"> [!] Bob API error: {exc}\n> Showing intelligent mock response below.\n\n" + result["content"]
         result["source"] = "mock-fallback"
         return result
 
