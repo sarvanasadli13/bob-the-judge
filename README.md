@@ -12,16 +12,19 @@ End-to-end IBM stack: **IBM Bob** as the development partner (5 task sessions in
 
 ---
 
-## Screenshots
+## Screenshots — End-to-end Cutover Story
 
-![Hero — Dashboard ready](docs/screenshots/01-hero.png)
-*IBM Carbon Design System dashboard — topbar shows `● LIVE Bob | ● watsonx.ai`, sidebar lists IBM Bob API + watsonx.ai (Granite) + MCP Server health, plus the Tenant Profile selector (4 reference bank tiers).*
+![1. Hero — Dashboard ready](docs/screenshots/01-hero.png)
+*Fresh dashboard. Topbar shows `● LIVE Bob | ● watsonx.ai`. Sidebar lists IBM Bob API + watsonx.ai (Granite) + MCP Server, plus the Tenant Profile selector (Tier1 Global = 99% threshold, $0.01 tolerance, 1.5σ anomaly).*
 
-![Results — READY FOR CUTOVER with tenant-calibrated thresholds](docs/screenshots/02-results.png)
-*Live parity analysis using the Tier 1 Global profile (99% threshold, $0.01 fee tolerance, 1.5σ anomaly). 80 transactions through legacy + modern systems, per-function Wilson 95% CI, READY FOR CUTOVER verdict.*
+![2. HOLD — DO NOT CUT, $4.8M at risk](docs/screenshots/02-hold-do-not-cut.png)
+*Run Analysis with Demo mode on the Tier 1 Global profile. 80 transactions through legacy + modern. **2 functions blocked** (International Wire Transfer, High-Value Wire Transfer), **$4.8M exposure**, 1 anomaly (>2σ). Bob the Judge says HOLD — DO NOT CUT.*
 
-![Bob's response — live IBM Granite via watsonx.ai](docs/screenshots/03-bob-granite-live.png)
-*Click `Ask Bob` → real-time call to `ibm/granite-4-h-small` on watsonx.ai. The badge `● LIVE — IBM Bob API · powered by Granite (ibm/granite-4-h-small) on watsonx.ai` plus the `WATSONX-...` session ID give full traceability. Granite produces a phased migration plan citing FFIEC, Basel III, and PSD2 by name.*
+![3. READY FOR CUTOVER — after applying Bob's parallel-run patch](docs/screenshots/03-ready-cutover.png)
+*Click `Apply Bob's Patch & Re-Analyse`. Bob deploys the parallel-run compatibility patch (modern fees align with legacy during dual-run window). Re-runs analysis. **All 4 functions cleared, zero exposure, READY FOR CUTOVER.***
+
+![4. Bob's response — live IBM Granite via watsonx.ai](docs/screenshots/04-bob-code-fix.png)
+*Bob explains the patch: real-time call to `ibm/granite-4-h-small` on watsonx.ai. Session ID `WATSONX-...` for full traceability. Granite generates a compatibility patch design citing FFIEC, Basel III, PSD2 by name.*
 
 ---
 
