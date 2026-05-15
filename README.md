@@ -133,14 +133,14 @@ Designed to plug into watsonx Orchestrate workflows.
 
 ## Bob Sessions
 
-The `bob-sessions/` folder contains four IBM Bob sessions captured during development on **2026-05-08** using IBM Bob 1.109.5 + bob 1.0.2:
+The `bob_sessions/` folder contains four IBM Bob sessions captured during development on **2026-05-08** using IBM Bob 1.109.5 + bob 1.0.2:
 
 | Session | Bob Mode | Highlight |
 |---|---|---|
-| [`A_plan.md`](bob-sessions/A_plan.md) | Plan | 939-line v2 iteration plan citing FFIEC, Basel III, PSD2, OCC, EBA |
-| [`B_code.md`](bob-sessions/B_code.md) | Edit | Live edits to `parity/scoring.py` — added `confidence_band` + `score_by_tenant()` |
-| [`C_ask.md`](bob-sessions/C_ask.md) | Ask | Regulator memo citing FFIEC IT Handbook, Basel III Pillar 2, PSD2 Art. 45 |
-| [`D_orchestrator.md`](bob-sessions/D_orchestrator.md) | Orchestrator | 4-stage cutover pipeline with Stage 4 delegated to an Ask-mode sub-task |
+| [`A_plan.md`](bob_sessions/A_plan.md) | Plan | 939-line v2 iteration plan citing FFIEC, Basel III, PSD2, OCC, EBA |
+| [`B_code.md`](bob_sessions/B_code.md) | Edit | Live edits to `parity/scoring.py` — added `confidence_band` + `score_by_tenant()` |
+| [`C_ask.md`](bob_sessions/C_ask.md) | Ask | Regulator memo citing FFIEC IT Handbook, Basel III Pillar 2, PSD2 Art. 45 |
+| [`D_orchestrator.md`](bob_sessions/D_orchestrator.md) | Orchestrator | 4-stage cutover pipeline with Stage 4 delegated to an Ask-mode sub-task |
 
 ---
 
@@ -163,7 +163,7 @@ bob-the-judge/
 ├── parity/                     # traffic generator, parity engine, scoring
 ├── audit/                      # ReportLab PDF builder
 ├── bob/                        # Bob client (real + mock fallback)
-└── bob-sessions/               # 4 IBM Bob exported sessions
+└── bob_sessions/               # IBM Bob exported sessions + consumption screenshots
 ```
 
 ---

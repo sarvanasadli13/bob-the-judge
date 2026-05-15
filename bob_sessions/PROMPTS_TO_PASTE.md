@@ -3,14 +3,14 @@
 **Two ways to run these:**
 
 ### Option A — One-shot CLI launch (fastest)
-Run `.\capture-sessions.ps1` from the project root. It opens IBM Bob with each prompt pre-loaded in the right mode. After each completes, use Bob's **Export Chat** button → save to `bob-sessions/` with the filename shown.
+Run `.\capture-sessions.ps1` from the project root. It opens IBM Bob with each prompt pre-loaded in the right mode. After each completes, use Bob's **Export Chat** button → save to `bob_sessions/` with the filename shown.
 
 ### Option B — Manual paste
 Open **IBM Bob** desktop, open this workspace folder, copy each prompt below into the chat panel. After each Bob response completes:
 
 1. Use Bob's built-in **export / save chat** feature.
 2. Save as PDF (preferred) or `.md` to this folder with the filename shown.
-3. After all 4 are done, the `bob-sessions/` folder satisfies the Lablab submission requirement.
+3. After all 4 are done, the `bob_sessions/` folder satisfies the Lablab submission requirement.
 
 **Bob mode mapping** — IBM Bob 1.109.5 supports three CLI modes: `ask`, `edit`, `agent`. We map our 4 capture sessions to:
 
@@ -138,9 +138,9 @@ Return per-stage output, then a final consolidated cutover recommendation.
 
 ## After capture
 
-- Verify all 4 PDFs/files saved in `bob-sessions/`
-- Update `bob-sessions/README.md` with the actual capture date (replace "May 15")
+- Verify all 4 PDFs/files saved in `bob_sessions/`
+- Update `bob_sessions/README.md` with the actual capture date (replace "May 15")
 - Commit and push to the public GitHub repo
-- Reference `bob-sessions/` in main README and submission description
+- Reference `bob_sessions/` in main README and submission description
 
 **Total time estimate:** 20–30 minutes interactive with IBM Bob.
