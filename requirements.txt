@@ -9,3 +9,14 @@ reportlab==4.2.5
 python-dotenv==1.0.1
 mcp>=1.0.0
 starlette<1.0
+
+# New dependencies for enhanced features
+scipy>=1.11.0          # Bayesian credible intervals (Beta distribution)
+numpy>=1.24.0          # Bootstrap resampling and statistical calculations
+
+# IBM watsonx.ai (Granite foundation model inference)
+ibm-watsonx-ai>=1.0.0
+
+# Testing dependencies
+pytest>=7.4.0          # Testing framework
+pytest-cov>=4.1.0      # Code coverage reporting

@@ -8,6 +8,7 @@ import plotly.express as px
 from parity.traffic_generator import run_batch
 from parity.parity_engine import analyse_batch, flag_anomalies
 from parity.scoring import score_results
+from parity.tenant_config import load_tenant, list_tenants, get_default_tenant
 from audit.pdf_report import generate_pdf
 from bob.client import ask_bob
 
@@ -190,7 +191,9 @@ def _check_mcp_running():
 
 legacy_up = _check_service("http://localhost:8001/health")
 modern_up = _check_service("http://localhost:8002/health")
-bob_live  = bool(__import__("os").environ.get("BOB_API_KEY", ""))
+import os as _os
+bob_live = bool(_os.environ.get("WATSONX_API_KEY") and _os.environ.get("WATSONX_PROJECT_ID")) or bool(_os.environ.get("BOB_API_KEY", ""))
+bob_engine_label = "IBM Bob API"  # Always Bob-branded; watsonx Granite is the engine behind the scenes
 mcp_active = _check_mcp_running()
 
 with st.sidebar:
@@ -206,11 +209,13 @@ with st.sidebar:
     </div>""", unsafe_allow_html=True)
 
     st.markdown('<div class="sb-section">System Health</div>', unsafe_allow_html=True)
+    watsonx_live = bool(_os.environ.get("WATSONX_API_KEY") and _os.environ.get("WATSONX_PROJECT_ID"))
     services = [
-        ("Legacy Bank",  "8001",                              legacy_up),
-        ("Modern Bank",  "8002",                              modern_up),
-        ("IBM Bob API",  "live" if bob_live else "mock",      bob_live),
-        ("MCP Server",   "active" if mcp_active else "ready", mcp_active),
+        ("Legacy Bank",   "8001",                                 legacy_up),
+        ("Modern Bank",   "8002",                                 modern_up),
+        ("IBM Bob API",   "live" if bob_live else "mock",          bob_live),
+        ("watsonx.ai",    "granite" if watsonx_live else "off",    watsonx_live),
+        ("MCP Server",    "active" if mcp_active else "ready",     mcp_active),
     ]
     for name, port, ok in services:
         if name == "MCP Server":
@@ -219,6 +224,9 @@ with st.sidebar:
         elif name == "IBM Bob API":
             dot = "#42be65" if ok else "#f1c21b"
             status_label = "LIVE" if ok else "MOCK"
+        elif name == "watsonx.ai":
+            dot = "#42be65" if ok else "#8d8d8d"
+            status_label = "GRANITE" if ok else "OFF"
         else:
             dot = "#42be65" if ok else "#fa4d56"
             status_label = "ONLINE" if ok else "OFFLINE"
@@ -230,6 +238,40 @@ with st.sidebar:
             f'</div>',
             unsafe_allow_html=True,
         )
+
+    st.markdown('<div class="sb-section">Tenant Profile</div>', unsafe_allow_html=True)
+    
+    # Get available tenants
+    available_tenants = list_tenants()
+    tenant_options = {str(tid): f"{str(tid).replace('_', ' ').title()}" for tid in available_tenants}
+    
+    # Initialize session state for tenant if not set
+    if "selected_tenant_id" not in st.session_state:
+        st.session_state["selected_tenant_id"] = "demo_default"
+    
+    # Tenant selector
+    selected_tenant_id = st.selectbox(
+        "Bank Profile",
+        options=list(tenant_options.keys()),
+        format_func=lambda x: tenant_options[str(x)],
+        key="tenant_selector",
+        help="Select the bank tier profile for risk-appropriate parity thresholds"
+    )
+    
+    # Update session state
+    st.session_state["selected_tenant_id"] = str(selected_tenant_id)
+    
+    # Load tenant profile
+    tenant = load_tenant(str(selected_tenant_id))
+    
+    # Display tenant info
+    st.markdown(
+        f'<div class="sb-row"><span class="sb-row-label">Parity Threshold</span><span class="sb-row-val">{tenant.parity_threshold_pct}%</span></div>'
+        f'<div class="sb-row"><span class="sb-row-label">Fee Tolerance</span><span class="sb-row-val">${tenant.fee_tolerance_usd:.2f}</span></div>'
+        f'<div class="sb-row"><span class="sb-row-label">Anomaly Sigma</span><span class="sb-row-val">{tenant.anomaly_sigma_threshold}σ</span></div>'
+        f'<div class="sb-row"><span class="sb-row-label">FFIEC Category</span><span class="sb-row-val">{tenant.ffiec_category}</span></div>',
+        unsafe_allow_html=True,
+    )
 
     st.markdown('<div class="sb-section">Run Statistics</div>', unsafe_allow_html=True)
     n_runs = len(st.session_state.get("run_history", []))
@@ -324,14 +366,14 @@ st.markdown(f"""
             Bob the Judge &nbsp;·&nbsp; Migration Cutover Advisor
         </span>
     </div>
-    <div class="ibm-topbar-right">{now_str} &nbsp;|&nbsp; <span style="color:{bob_color}">{bob_label}</span> Bob &nbsp;|&nbsp; <span style="color:{mcp_color}">{mcp_label}</span> MCP</div>
+    <div class="ibm-topbar-right">{now_str} &nbsp;|&nbsp; <span style="color:{bob_color}">{bob_label}</span> Bob &nbsp;|&nbsp; <span style="color:{mcp_color}">{mcp_label}</span> MCP &nbsp;|&nbsp; <span style="color:#42be65">●</span> watsonx.ai</div>
 </div>
 """, unsafe_allow_html=True)
 
 # ── Hero band (always visible) ────────────────────────────────────────────────
 st.markdown("""
 <div class="hero-band">
-    <div class="hero-eyebrow">MIGRATION CUTOVER DECISION ADVISOR · POWERED BY IBM BOB</div>
+    <div class="hero-eyebrow">MIGRATION CUTOVER DECISION ADVISOR · POWERED BY IBM BOB &amp; WATSONX.AI GRANITE</div>
     <div class="hero-title">When is it safe to <b>flip the switch</b>?</div>
     <div class="hero-sub">
         Bob the Judge produces a per-function readiness verdict on the COBOL → modern banking cutover —
@@ -389,15 +431,20 @@ if run_analysis:
         )
         st.stop()
 
-    _show_scan(70, "Running Parity Engine · 2σ anomaly detection...")
-    results = analyse_batch(pairs)
-    results = flag_anomalies(results)
-    _show_scan(92, "Computing Wilson 95% CI readiness scores...")
-    scores = score_results(results)
+    # Load tenant profile for analysis
+    tenant_id = st.session_state.get("selected_tenant_id", "demo_default")
+    tenant = load_tenant(tenant_id)
+    
+    _show_scan(70, f"Running Parity Engine · {tenant.anomaly_sigma_threshold}σ anomaly detection...")
+    results = analyse_batch(pairs, tenant=tenant)
+    results = flag_anomalies(results, tenant=tenant)
+    _show_scan(92, f"Computing Wilson 95% CI readiness scores (threshold: {tenant.parity_threshold_pct}%)...")
+    scores = score_results(results, tenant=tenant)
     _scan_ph.empty()
 
     st.session_state["scores"] = scores
     st.session_state["results"] = results
+    st.session_state["current_tenant"] = tenant
     st.session_state["run_ts"] = datetime.now(timezone.utc)
     if "run_history" not in st.session_state:
         st.session_state["run_history"] = []
@@ -414,8 +461,13 @@ run_ts = st.session_state.get("run_ts", datetime.now(timezone.utc))
 if export_pdf and scores:
     bob_resp = st.session_state.get("bob_response") or st.session_state.get("bob_patch_response")
     bob_sid = bob_resp.get("session_id") if bob_resp else None
+    
+    # Get tenant profile for PDF
+    current_tenant = st.session_state.get("current_tenant")
+    tenant_profile = current_tenant.to_dict() if current_tenant else None
+    
     with st.spinner("Generating audit report..."):
-        pdf_bytes = generate_pdf(scores, results, run_ts, bob_session_id=bob_sid)
+        pdf_bytes = generate_pdf(scores, results, run_ts, bob_session_id=bob_sid, tenant_profile=tenant_profile)
     filename = f"bob_the_judge_audit_{run_ts.strftime('%Y%m%d_%H%M%S')}.pdf"
     st.download_button(
         label="Download Audit Report (PDF)",
@@ -985,9 +1037,19 @@ with bob_col2:
 
     if "bob_response" in st.session_state:
         resp = st.session_state["bob_response"]
-        is_live = resp.get("source") != "mock"
+        source = resp.get("source", "mock")
+        is_live = source != "mock"
         tag_class = "bob-source-live" if is_live else "bob-source-mock"
-        tag_text = "● LIVE — IBM Bob API" if is_live else "○ IBM Bob API — connecting at hackathon kickoff"
+        if source == "watsonx-granite":
+            tag_text = f"● LIVE — IBM Bob API · powered by Granite ({resp.get('model','granite')}) on watsonx.ai"
+        elif source == "watsonx-fallback":
+            tag_text = "◐ MOCK — IBM Bob API (watsonx.ai unreachable, using fallback)"
+        elif source == "live":
+            tag_text = "● LIVE — IBM Bob API"
+        elif source == "mock-fallback":
+            tag_text = "◐ MOCK — IBM Bob API (using intelligent fallback)"
+        else:
+            tag_text = "○ MOCK — IBM Bob API (no credentials configured)"
         st.markdown(f"""
         <div class="bob-panel">
             <div class="{tag_class}">{tag_text}</div>

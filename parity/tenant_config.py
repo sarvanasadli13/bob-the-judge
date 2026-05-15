@@ -113,25 +113,22 @@ def load_tenant(tenant_id: str) -> TenantProfile:
     )
 
 
-def list_tenants() -> list[dict]:
+def list_tenants() -> list[str]:
     """
-    List all available tenant profiles.
-    
+    List all available tenant profile IDs.
+
     Returns:
-        List of dicts with tenant_id, name, and tier for each configured tenant
+        List of tenant_id strings for each configured tenant
     """
     config_path = Path(__file__).parent.parent / "config" / "tenants.json"
-    
+
     if not config_path.exists():
         return []
-    
+
     with open(config_path) as f:
         tenants = json.load(f)
-    
-    return [
-        {"tenant_id": tid, "name": data["name"], "tier": data["tier"]}
-        for tid, data in tenants.items()
-    ]
+
+    return list(tenants.keys())
 
 
 def get_default_tenant() -> TenantProfile:

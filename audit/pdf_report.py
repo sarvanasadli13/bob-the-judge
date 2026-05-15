@@ -90,7 +90,7 @@ def _header_footer(canvas, doc):
     canvas.restoreState()
 
 
-def generate_pdf(scores: list[dict], results: list[dict], run_ts: datetime | None = None, bob_session_id: str | None = None) -> bytes:
+def generate_pdf(scores: list[dict], results: list[dict], run_ts: datetime | None = None, bob_session_id: str | None = None, tenant_profile: dict | None = None) -> bytes:
     if run_ts is None:
         run_ts = datetime.now(timezone.utc)
 
@@ -147,6 +147,50 @@ def generate_pdf(scores: list[dict], results: list[dict], run_ts: datetime | Non
     ]
 
     story.append(Paragraph("Executive Summary", s["section"]))
+    
+    # Add tenant profile section if provided
+    if tenant_profile:
+        story.append(Spacer(1, 2 * mm))
+        story.append(Paragraph("Tenant Risk Profile", s["bold"]))
+        story.append(Spacer(1, 1 * mm))
+        
+        tenant_data = [
+            ["Profile Attribute", "Value"],
+            ["Tenant ID", tenant_profile.get("tenant_id", "—")],
+            ["Institution Name", tenant_profile.get("name", "—")],
+            ["FFIEC Category", tenant_profile.get("ffiec_category", "—")],
+            ["Parity Threshold", f"{tenant_profile.get('parity_threshold_pct', 95)}%"],
+            ["Fee Tolerance", f"${tenant_profile.get('fee_tolerance_usd', 0.02):.2f}"],
+            ["Anomaly Sigma Threshold", f"{tenant_profile.get('anomaly_sigma_threshold', 2.0)}σ"],
+            ["Basel III Risk Weight", f"{tenant_profile.get('basel_operational_risk_weight', 15)}%"],
+            ["PSD2 Jurisdiction", "Yes" if tenant_profile.get("psd2_jurisdiction") else "No"],
+        ]
+        
+        t_tenant = Table(tenant_data, colWidths=[90 * mm, 75 * mm])
+        t_tenant.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), C_BRAND),
+            ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+            ("FONTSIZE", (0, 0), (-1, -1), 8),
+            ("ROWBACKGROUNDS", (0, 1), (-1, -1), [C_LIGHT_GREY, colors.white]),
+            ("GRID", (0, 0), (-1, -1), 0.5, C_BORDER),
+            ("LEFTPADDING", (0, 0), (-1, -1), 8),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 8),
+            ("TOPPADDING", (0, 0), (-1, -1), 4),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+        ]))
+        story.append(t_tenant)
+        story.append(Spacer(1, 3 * mm))
+        
+        # Add regulatory justification note
+        story.append(Paragraph(
+            "<b>Regulatory Basis:</b> Thresholds calibrated per FFIEC IT Handbook "
+            "(risk commensurate with institution size/complexity), Basel III Pillar 2 "
+            "(institution-specific operational risk assessment), and PSD2 requirements "
+            "where applicable.",
+            s["small"]
+        ))
+        story.append(Spacer(1, 4 * mm))
     t = Table(summary_data, colWidths=[90 * mm, 75 * mm])
     t.setStyle(TableStyle([
         ("BACKGROUND", (0, 0), (-1, 0), C_BRAND),
@@ -304,6 +348,120 @@ def generate_pdf(scores: list[dict], results: list[dict], run_ts: datetime | Non
             ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
         ]))
         story.append(KeepTogether([t_rec, Spacer(1, 3 * mm)]))
+
+    # ── Regulatory Compliance Attestation ──────────────────────────────────
+    if tenant_profile:
+        story.append(Spacer(1, 8 * mm))
+        story.append(Paragraph("Regulatory Compliance Attestation", s["section"]))
+        
+        # Generate compliance assessment
+        from parity.compliance import ComplianceFramework
+        framework = ComplianceFramework()
+        assessments = framework.assess_compliance(scores, tenant_profile, drift_summary=None)
+        compliance_score = framework.get_compliance_score(assessments)
+        
+        # Overall compliance score
+        score_color = C_GREEN if compliance_score['overall_score'] >= 90 else C_YELLOW if compliance_score['overall_score'] >= 70 else C_RED
+        
+        compliance_summary = [
+            ["Compliance Metric", "Result"],
+            ["Overall Compliance Score", f"{compliance_score['overall_score']:.1f}/100"],
+            ["Total Requirements Assessed", str(compliance_score['total_requirements'])],
+            ["Critical Failures", str(compliance_score['critical_failures'])],
+        ]
+        
+        t_comp = Table(compliance_summary, colWidths=[90 * mm, 75 * mm])
+        t_comp.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), C_BRAND),
+            ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+            ("FONTSIZE", (0, 0), (-1, -1), 9),
+            ("ROWBACKGROUNDS", (0, 1), (-1, -1), [C_LIGHT_GREY, colors.white]),
+            ("GRID", (0, 0), (-1, -1), 0.5, C_BORDER),
+            ("LEFTPADDING", (0, 0), (-1, -1), 8),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 8),
+            ("TOPPADDING", (0, 0), (-1, -1), 5),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+            ("TEXTCOLOR", (1, 1), (1, 1), score_color),
+            ("FONTNAME", (1, 1), (1, 1), "Helvetica-Bold"),
+        ]))
+        story.append(t_comp)
+        story.append(Spacer(1, 4 * mm))
+        
+        # Framework breakdown
+        framework_rows = [["Regulatory Framework", "Score", "Status"]]
+        for framework_name, data in compliance_score['framework_scores'].items():
+            status = "PASS" if data['failed'] == 0 else "PARTIAL" if data['failed'] < data['total_requirements'] else "FAIL"
+            status_color = C_GREEN if status == "PASS" else C_YELLOW if status == "PARTIAL" else C_RED
+            framework_rows.append([
+                framework_name,
+                f"{data['score']:.1f}/100",
+                status
+            ])
+        
+        t_frameworks = Table(framework_rows, colWidths=[90 * mm, 40 * mm, 35 * mm])
+        style_cmds_fw = [
+            ("BACKGROUND", (0, 0), (-1, 0), C_DARK),
+            ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+            ("FONTSIZE", (0, 0), (-1, -1), 8),
+            ("ROWBACKGROUNDS", (0, 1), (-1, -1), [C_LIGHT_GREY, colors.white]),
+            ("GRID", (0, 0), (-1, -1), 0.5, C_BORDER),
+            ("LEFTPADDING", (0, 0), (-1, -1), 6),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+            ("TOPPADDING", (0, 0), (-1, -1), 4),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+            ("ALIGN", (1, 0), (-1, -1), "CENTER"),
+        ]
+        
+        # Color-code status column
+        for i in range(1, len(framework_rows)):
+            status = framework_rows[i][2]
+            status_color = C_GREEN if status == "PASS" else C_YELLOW if status == "PARTIAL" else C_RED
+            style_cmds_fw.append(("TEXTCOLOR", (2, i), (2, i), status_color))
+            style_cmds_fw.append(("FONTNAME", (2, i), (2, i), "Helvetica-Bold"))
+        
+        t_frameworks.setStyle(TableStyle(style_cmds_fw))
+        story.append(t_frameworks)
+        story.append(Spacer(1, 4 * mm))
+        
+        # Attestation statement
+        if compliance_score['critical_failures'] > 0:
+            attestation_text = (
+                f"<b>COMPLIANCE WARNING:</b> {compliance_score['critical_failures']} critical "
+                f"requirement(s) failed. This migration cutover does NOT meet all regulatory "
+                f"requirements. Immediate remediation required before proceeding. "
+                f"Escalate to compliance team and migration governance board."
+            )
+            attestation_color = C_RED
+        else:
+            attestation_text = (
+                f"<b>COMPLIANCE ATTESTATION:</b> All critical regulatory requirements satisfied. "
+                f"Overall compliance score: {compliance_score['overall_score']:.1f}/100. "
+                f"This migration cutover meets FFIEC, Basel III, PSD2, SWIFT gpi, and SOX 404 "
+                f"requirements based on automated assessment. Manual review and sign-off required."
+            )
+            attestation_color = C_GREEN
+        
+        attestation_table = [[Paragraph(attestation_text, s["body"])]]
+        t_att = Table(attestation_table, colWidths=[165 * mm])
+        t_att.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, -1), C_LIGHT_GREY),
+            ("BOX", (0, 0), (-1, -1), 2, attestation_color),
+            ("LEFTPADDING", (0, 0), (-1, -1), 10),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 10),
+            ("TOPPADDING", (0, 0), (-1, -1), 10),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 10),
+        ]))
+        story.append(t_att)
+        story.append(Spacer(1, 2 * mm))
+        
+        story.append(Paragraph(
+            "<b>Note:</b> This compliance assessment is generated automatically based on system "
+            "configuration and analysis results. It does not constitute legal advice. "
+            "Consult with legal and compliance teams before making cutover decisions.",
+            s["small"]
+        ))
 
     # ── Sign-off block ─────────────────────────────────────────────────────
     story.append(Spacer(1, 8 * mm))

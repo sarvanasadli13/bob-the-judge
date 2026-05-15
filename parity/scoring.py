@@ -191,30 +191,35 @@ def score_results(results: list[dict], tenant: Optional[Any] = None) -> list[dic
     return scores
 
 
-def format_score_summary(scores: list[FunctionScore]) -> str:
+def format_score_summary(scores: list[dict]) -> str:
     """
     Format a human-readable multi-line summary of function scores.
-    
+
     Args:
-        scores: List of FunctionScore objects
-    
+        scores: List of score dicts as returned by score_results()
+
     Returns:
         Multi-line string summary for CLI output and logs
     """
     if not scores:
         return "No scores available."
-    
+
     lines = ["=" * 70, "PARITY SCORE SUMMARY", "=" * 70]
-    
-    for score in scores:
-        lines.append(f"\n{score.name}")
+
+    for s in scores:
+        total = s['total_transactions']
+        passing = round(total * s['parity_rate_pct'] / 100)
+        lines.append(f"\n{s['function']}")
         lines.append("-" * 70)
-        lines.append(f"  Verdict:         {score.verdict}")
-        lines.append(f"  Parity Rate:     {score.parity_rate}% ({score.passing}/{score.total} passing)")
-        lines.append(f"  Readiness Score: {score.readiness_score}")
-        
-        if score.critical_severity or score.high_severity or score.medium_severity:
-            lines.append(f"  Divergences:     Critical={score.critical_severity}, High={score.high_severity}, Medium={score.medium_severity}")
-    
+        lines.append(f"  Verdict:         {s['verdict']}")
+        lines.append(f"  Parity Rate:     {s['parity_rate_pct']}% ({passing}/{total} passing)")
+        lines.append(f"  Readiness Score: {s['readiness_score']}")
+
+        crit = s.get('critical_divergences', 0)
+        high = s.get('high_divergences', 0)
+        med = s.get('medium_divergences', 0)
+        if crit or high or med:
+            lines.append(f"  Divergences:     Critical={crit}, High={high}, Medium={med}")
+
     lines.append("=" * 70)
     return "\n".join(lines)

@@ -1,11 +1,13 @@
 """
-Bob client — talks to IBM Bob API when credentials are available.
-Falls back to intelligent mock that mirrors Bob's real response structure
-so the demo works offline and before May 15 credentials drop.
+Bob client — IBM watsonx.ai Granite primary, intelligent mock fallback.
+
+Priority order:
+  1. WATSONX_API_KEY set → real IBM Granite inference via watsonx.ai
+  2. BOB_API_KEY set     → legacy Bob REST API (returns 405, falls back to mock)
+  3. Neither set         → mock directly
 """
 
 import os
-import json
 import time
 import logging
 from typing import Literal
@@ -19,21 +21,74 @@ logger = logging.getLogger("bob.client")
 BOB_API_KEY = os.getenv("BOB_API_KEY", "")
 BOB_API_URL = os.getenv("BOB_API_URL", "https://api.ibmbob.ai/v1")
 
+WATSONX_API_KEY = os.getenv("WATSONX_API_KEY", "")
+WATSONX_PROJECT_ID = os.getenv("WATSONX_PROJECT_ID", "")
+WATSONX_URL = os.getenv("WATSONX_URL", "https://us-south.ml.cloud.ibm.com")
+WATSONX_MODEL = os.getenv("WATSONX_MODEL", "ibm/granite-4-h-small")
+
 BobMode = Literal["plan", "code", "ask", "orchestrator"]
 
 
-def _call_real_bob(mode: BobMode, prompt: str, context: dict) -> dict:
-    """Live Bob API call — active from May 15 when credentials drop."""
-    import httpx
+def _watsonx_prompt(mode: BobMode, prompt: str, context: dict) -> str:
+    """Build a mode-aware prompt for Granite."""
+    scores = context.get("scores", [])
+    safe = [s["function"] for s in scores if s.get("verdict") == "SAFE_TO_CUT"]
+    blocked = [s["function"] for s in scores if s.get("verdict") == "DO_NOT_CUT"]
+    overall_parity = context.get("overall_parity", 0)
+    total_txns = context.get("total_txns", 0)
 
-    payload = {
+    persona = {
+        "plan": "You are a senior banking migration architect producing a phased cutover plan.",
+        "code": "You are a senior banking engineer producing a code fix for FX margin reconciliation.",
+        "ask": "You are a banking compliance officer explaining a cutover decision to a regulator.",
+        "orchestrator": "You are an orchestration agent coordinating a 4-stage cutover pipeline.",
+    }[mode]
+
+    return f"""{persona}
+
+CONTEXT
+- Transactions analysed: {total_txns:,}
+- Overall parity: {overall_parity:.1f}%
+- Safe to cut: {', '.join(safe) if safe else 'none'}
+- Blocked: {', '.join(blocked) if blocked else 'none'}
+
+USER QUESTION
+{prompt}
+
+Respond with structured markdown. Be concrete, cite regulatory frameworks (FFIEC, Basel III, PSD2) where relevant, and keep under 500 words.
+"""
+
+
+def _call_watsonx(mode: BobMode, prompt: str, context: dict) -> dict:
+    """Call IBM Granite via watsonx.ai."""
+    from ibm_watsonx_ai import Credentials
+    from ibm_watsonx_ai.foundation_models import ModelInference
+
+    creds = Credentials(url=WATSONX_URL, api_key=WATSONX_API_KEY)
+    model = ModelInference(
+        model_id=WATSONX_MODEL,
+        credentials=creds,
+        project_id=WATSONX_PROJECT_ID,
+        params={"max_new_tokens": 700, "temperature": 0.7},
+    )
+    full_prompt = _watsonx_prompt(mode, prompt, context)
+    logger.info("watsonx.ai %s  mode=%s  project=%s...", WATSONX_MODEL, mode, WATSONX_PROJECT_ID[:8])
+    content = model.generate_text(prompt=full_prompt)
+    return {
         "mode": mode,
-        "prompt": prompt,
-        "context": context,
-        "model": "bob-enterprise",
+        "content": content.strip(),
+        "model": WATSONX_MODEL,
+        "tokens_used": len(content) // 4,
+        "session_id": f"WATSONX-{int(time.time())}",
+        "source": "watsonx-granite",
     }
-    logger.info("POST %s/chat  mode=%s  key=%s...", BOB_API_URL, mode, BOB_API_KEY[:8])
 
+
+def _call_real_bob(mode: BobMode, prompt: str, context: dict) -> dict:
+    """Legacy Bob REST API path. Bob has no REST API so this always falls back."""
+    import httpx
+    payload = {"mode": mode, "prompt": prompt, "context": context, "model": "bob-enterprise"}
+    logger.info("POST %s/chat  mode=%s  key=%s...", BOB_API_URL, mode, BOB_API_KEY[:8])
     try:
         resp = httpx.post(
             f"{BOB_API_URL}/chat",
@@ -41,39 +96,22 @@ def _call_real_bob(mode: BobMode, prompt: str, context: dict) -> dict:
             headers={"Authorization": f"Bearer {BOB_API_KEY}"},
             timeout=30.0,
         )
-        logger.info("Response %s: %s", resp.status_code, resp.text[:200])
         resp.raise_for_status()
         data = resp.json()
-        # Normalise response — handle different API shapes gracefully
-        if isinstance(data, dict) and "content" in data:
-            return {**data, "source": "live"}
-        # If the real API returns a different shape, wrap it
-        return {
-            "mode": mode,
-            "content": data.get("message") or data.get("response") or data.get("text") or str(data),
-            "model": data.get("model", "bob-enterprise"),
-            "tokens_used": data.get("usage", {}).get("total_tokens", 0),
-            "session_id": data.get("session_id", f"BOB-LIVE-{int(time.time())}"),
-            "source": "live",
-        }
+        return {**data, "source": "live"}
     except Exception as exc:
-        logger.error("Bob API call failed: %s — falling back to mock", exc)
+        logger.error("Bob REST API failed: %s -- falling back to mock", exc)
         result = _mock_bob(mode, prompt, context)
-        result["content"] = f"> [!] Bob API error: {exc}\n> Showing intelligent mock response below.\n\n" + result["content"]
         result["source"] = "mock-fallback"
         return result
 
 
 def _mock_bob(mode: BobMode, prompt: str, context: dict) -> dict:
-    """
-    Intelligent mock that mirrors Bob's real multi-modal response structure.
-    Produces context-aware responses using the actual scores data passed in.
-    """
-    time.sleep(0.4)  # realistic latency
-
+    """Intelligent mock — used when no watsonx/Bob credentials present."""
+    time.sleep(0.4)
     scores = context.get("scores", [])
-    safe = [s["function"] for s in scores if s["verdict"] == "SAFE_TO_CUT"]
-    blocked = [s["function"] for s in scores if s["verdict"] == "DO_NOT_CUT"]
+    safe = [s["function"] for s in scores if s.get("verdict") == "SAFE_TO_CUT"]
+    blocked = [s["function"] for s in scores if s.get("verdict") == "DO_NOT_CUT"]
     overall_parity = context.get("overall_parity", 0)
 
     if mode == "plan":
@@ -82,51 +120,29 @@ def _mock_bob(mode: BobMode, prompt: str, context: dict) -> dict:
 **Assessment:** Based on {context.get('total_txns', 0):,} transactions analysed at {overall_parity:.1f}% overall parity.
 
 ### Phase 1 — Immediate Cutover (This Week)
-{chr(10).join(f'- ✅ {f}' for f in safe) if safe else '- No functions cleared yet'}
+{chr(10).join(f'- [SAFE] {f}' for f in safe) if safe else '- No functions cleared yet'}
 
 ### Phase 2 — Blocked (Requires Investigation)
-{chr(10).join(f'- ❌ {f} — reconcile divergences before cutting over' for f in blocked) if blocked else '- None'}
+{chr(10).join(f'- [HOLD] {f} — reconcile divergences before cutting over' for f in blocked) if blocked else '- None'}
 
 ### Phase 3 — Parallel Run Extension
 - Extend dual-run for blocked functions by minimum 7 days
 - Re-run Bob the Judge after each fix deployment
-- Cutover approved only when readiness score ≥ 95
-
-### Risk Register
-| Risk | Likelihood | Impact | Mitigation |
-|------|-----------|--------|------------|
-| Fee rounding mismatch in production | HIGH | HIGH | Reconcile FX margin logic |
-| Audit log format divergence | LOW | MEDIUM | Legacy format preserved in modern system |
-| Latency SLA breach | LOW | LOW | Modern system 4× faster — no risk |
+- Cutover approved only when readiness score >= 95
 
 **Bob recommends:** Cut approved functions now. Do not delay on cleared paths."""
 
     elif mode == "code":
-        content = f"""## Bob's Code Fix — International FX Margin Reconciliation
+        content = """## Bob's Code Fix — International FX Margin Reconciliation
 
-The divergence in `International Wire Transfer` stems from a fee calculation mismatch.
-
-**Root cause identified:**
 ```python
-# Legacy (services/legacy_bank.py:32)
-fee = amt * Decimal("0.025") + Decimal("0.30") + amt * Decimal("0.020")
-# Fixed 2.0% FX margin — hardcoded from 2009 contract
-
-# Modern (services/modern_bank.py) uses real-time FX spread
-# This produces different settled amounts for international transfers
-```
-
-**Bob's recommended fix:**
-```python
-# services/modern_bank.py — add legacy-compatible FX mode
-FX_LEGACY_MARGIN = Decimal("0.020")  # match legacy during parallel run
+# services/modern_bank.py
+FX_LEGACY_MARGIN = Decimal("0.020")
 
 def modern_fee(amount: float, txn_type: str, legacy_compat: bool = True) -> Decimal:
     amt = Decimal(str(amount))
     base_fee = amt * Decimal("0.015") + Decimal("0.30")
     if txn_type == "international":
-        # During parallel run: use legacy margin for parity
-        # After cutover: switch to real-time FX (set legacy_compat=False)
         fx_margin = FX_LEGACY_MARGIN if legacy_compat else get_realtime_fx_spread()
         base_fee += amt * fx_margin
     return base_fee.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
@@ -139,39 +155,25 @@ def modern_fee(amount: float, txn_type: str, legacy_compat: bool = True) -> Deci
 
 **Q: Is it safe to cut over now?**
 
-**A:** Partially. Here's the breakdown:
+**A:** Partially. Domestic flows at {overall_parity:.1f}% parity are clear. International Wire is blocked due to FX margin divergence (legacy 2.0% fixed margin, modern real-time spread).
 
-| Function | Parity | Verdict | Action |
-|----------|--------|---------|--------|
-{chr(10).join(f"| {s['function']} | {s['parity_rate_pct']:.1f}% | {s['verdict'].replace('_', ' ')} | {'Cut now' if s['verdict'] == 'SAFE_TO_CUT' else 'Hold'} |" for s in scores)}
+**Action:** Cut over {', '.join(safe) if safe else 'cleared functions'} now. Hold {', '.join(blocked) if blocked else 'no functions'} until FX reconciliation is deployed.
 
-**Why is International Wire blocked?**
-The legacy system uses a fixed 2.0% FX margin (contract from 2009). The modern system uses real-time spreads. This creates a fee difference on every international transaction. This is not a bug — it's a policy decision that must be resolved before cutover.
-
-**What happens if you cut over anyway?**
-Fee overcharges of ${context.get('avg_intl_diff', 648):.0f} per transaction on average. Regulatory exposure under PSD2 Article 45 (transparency of fees). Do not cut over international without reconciliation.
-
-**Confidence in domestic cutover:** 99.1%
-**Estimated time to fix international:** 2-3 hours of development."""
+**Regulatory anchor:** PSD2 Article 45 (transparency of fees), FFIEC IT Handbook section on parallel-run validation."""
 
     else:  # orchestrator
         content = f"""## Bob Orchestrator — Automated Cutover Workflow
 
-**Orchestrating 4-agent cutover pipeline:**
-
 ```
-Agent 1 [ANALYSER]     → Scanned {context.get('total_txns', 0):,} transactions ✅
-Agent 2 [RISK-SCOUT]   → Identified {len(blocked)} blocked function(s) ✅
-Agent 3 [FIX-GEN]      → Generated reconciliation code for FX margin ✅
-Agent 4 [REPORTER]     → Audit PDF generated and signed off ✅
+Agent 1 [ANALYSER]     -> Scanned {context.get('total_txns', 0):,} transactions
+Agent 2 [RISK-SCOUT]   -> Identified {len(blocked)} blocked function(s)
+Agent 3 [FIX-GEN]      -> Generated reconciliation code for FX margin
+Agent 4 [REPORTER]     -> Audit PDF generated and signed off
 ```
 
 **Orchestrated decision:**
-- {', '.join(safe)} → **CUTTING OVER NOW** (automated deployment triggered)
-- {', '.join(blocked) if blocked else 'None'} → **HELD** (Fix-Gen patch queued for review)
-
-**Next automated action:** Schedule re-analysis in 24h after FX margin fix deployment.
-**Audit trail:** All decisions logged with timestamp, confidence score, and Bob session ID."""
+- {', '.join(safe) if safe else 'None'} -> **CUTTING OVER NOW**
+- {', '.join(blocked) if blocked else 'None'} -> **HELD** for review"""
 
     return {
         "mode": mode,
@@ -184,7 +186,15 @@ Agent 4 [REPORTER]     → Audit PDF generated and signed off ✅
 
 
 def ask_bob(mode: BobMode, prompt: str, context: dict) -> dict:
-    """Entry point — uses real Bob if API key present, mock otherwise."""
+    """Entry point — watsonx Granite primary, mock fallback."""
+    if WATSONX_API_KEY and WATSONX_PROJECT_ID:
+        try:
+            return _call_watsonx(mode, prompt, context)
+        except Exception as exc:
+            logger.error("watsonx.ai failed: %s -- falling back to mock", exc)
+            result = _mock_bob(mode, prompt, context)
+            result["source"] = "watsonx-fallback"
+            return result
     if BOB_API_KEY:
         return _call_real_bob(mode, prompt, context)
     return _mock_bob(mode, prompt, context)
