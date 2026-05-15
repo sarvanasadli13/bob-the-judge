@@ -86,6 +86,17 @@ def main():
         print("\nService startup failed. Check your environment.")
         sys.exit(1)
 
+    # Reset any leftover Bob patches so each launch starts from a clean baseline
+    # (otherwise the HOLD -> patch -> READY demo arc is hidden behind sticky state).
+    try:
+        urllib.request.urlopen(
+            urllib.request.Request("http://localhost:8002/admin/reset_patches", method="POST"),
+            timeout=3,
+        )
+        print("  [OK] Modern Bank patches cleared (fresh demo baseline)")
+    except Exception:
+        pass
+
     # Start dashboard
     print("Starting dashboard...")
     dash = subprocess.Popen(DASHBOARD_CMD, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
