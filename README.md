@@ -2,6 +2,8 @@
 
 **Migration Cutover Decision Advisor — Powered by IBM Bob + IBM watsonx.ai Granite.**
 
+🚀 **Live demo: [bob-the-judge-production.up.railway.app](https://bob-the-judge-production.up.railway.app/)**
+
 Built for the IBM Bob Hackathon 2026 (Lablab.ai, May 15–17).
 
 > Bob writes the code. Bob ships it. **Bob the Judge tells Bob when to flip the switch.**
